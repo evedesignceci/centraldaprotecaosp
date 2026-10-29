@@ -1,432 +1,85 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Central da Proteção | Link na Bio</title>
-  
-  <!-- Fontes Google (Inter) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          fontFamily: { sans: ['Inter', 'sans-serif'] },
-          colors: {
-            brand: {
-              gold: '#F5A623',
-              blue: '#153E75',
-              darkblue: '#0A1633'
-            }
-          }
-        }
+// ==========================================
+// BACKEND API - CENTRAL DA PROTEÇÃO (GOOGLE APPS SCRIPT)
+// ==========================================
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sh = ss.getSheetByName('Leads');
+    if (!sh) {
+      sh = ss.insertSheet('Leads');
+      sh.appendRow([
+        'Data e Hora', 'Tipo de Lead', 'Canal de Conversão', 'Assunto',
+        'Detalhes da Interação', 'Status do Lead', 'Corretor Responsável',
+        'Imóvel de Interesse', 'Data de Retorno', 'Próxima Ação'
+      ]);
+    }
+
+    let p = {};
+    try {
+      if (e && e.postData && e.postData.contents) {
+        p = JSON.parse(e.postData.contents);
       }
-    }
-  </script>
-
-  <style>
-    /* Animações do Chat e Efeitos sem piscar */
-    .chat-bubble-bot { animation: fadeInBot 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    .chat-bubble-user { animation: fadeInUser 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    @keyframes fadeInBot {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes fadeInUser {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+    } catch (err) {
+      p = (e && e.parameter) ? e.parameter : {};
     }
 
-    /* Scrollbar minimalista para o chat */
-    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: rgba(255,255,255,0.3);
-      border-radius: 4px;
+    // Se vier vazio do postData, tenta pegar dos parâmetros normais da URL/Form
+    if (!p.nome && e && e.parameter) {
+      p = e.parameter;
     }
 
-    /* Efeito de pulso customizado para o botão flutuante */
-    @keyframes pulse-whatsapp {
-      0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.7); }
-      70% { box-shadow: 0 0 0 16px rgba(37, 211, 102, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); }
-    }
-    .whatsapp-pulse {
-      animation: pulse-whatsapp 2s infinite;
-    }
-  </style>
-</head>
-<body class="font-sans text-white min-h-screen relative antialiased overflow-x-hidden selection:bg-brand-gold selection:text-white">
+    if (p.website) return resp('ignorado'); // Isca anti-robô
 
-  <!-- ========================================== -->
-  <!-- BACKGROUND GRADIENTE (Azul Royal/Cobalto Escuro) -->
-  <!-- ========================================== -->
-  <div class="fixed inset-0 z-0 bg-gradient-to-br from-[#1A3A73] via-[#102B5C] to-[#0A1633]"></div>
-  
-  <!-- Marca D'água Suave (Logo em relevo - Opacity 0.05) -->
-  <div class="fixed inset-0 z-0 flex items-center justify-center opacity-[0.05] pointer-events-none overflow-hidden mix-blend-overlay">
-    <img src="https://res.cloudinary.com/oactqmgs/image/upload/v1793214951/central_d_aprote%C3%A7%C3%A3o.png" 
-         alt="Texture" 
-         class="w-[180%] max-w-[900px] object-contain scale-110 blur-[1px]">
-  </div>
-
-  <!-- ========================================== -->
-  <!-- CONTEÚDO PRINCIPAL (Mobile-First max-w-md) -->
-  <!-- ========================================== -->
-  <main class="relative z-10 w-full max-w-md mx-auto flex flex-col items-center px-6 pt-10 pb-24">
-
-    <!-- Cabeçalho (Foto Limpa Branca + Texto) -->
-    <header class="text-center flex flex-col items-center mb-6 w-full">
-      <!-- Círculo Branco com Sombra Elegante (Sem distorcer a logo) -->
-      <div class="w-[96px] h-[96px] rounded-full bg-white shadow-xl shadow-black/20 border border-brand-gold/30 mb-4 flex items-center justify-center overflow-hidden p-2.5 backdrop-blur-sm">
-        <img src="https://res.cloudinary.com/oactqmgs/image/upload/v1793214951/central_d_aprote%C3%A7%C3%A3o.png" alt="Central da Proteção" class="w-full h-full object-contain">
-      </div>
-      
-      <!-- Nome e Selo Verificado -->
-      <div class="flex items-center gap-1.5 justify-center">
-        <h1 class="text-[20px] font-bold text-white tracking-tight">Central da Proteção | SP</h1>
-        <!-- Selo de Verificado -->
-        <svg class="w-5 h-5 text-blue-400" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6 12.6l1.5-1.5 2.6 2.6 6.4-6.4 1.5 1.5-7.9 7.9z" fill="#fff"></path>
-          <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1.9-5.3l7.9-7.9-1.5-1.5-6.4 6.4-2.6-2.6L6 12.6l4.1 4.1z" fill="#3B82F6"></path>
-        </svg>
-      </div>
-      
-      <p class="text-[14px] font-medium text-white/80 mt-1.5 max-w-[280px] leading-relaxed">
-        Aqui você é o Centro! 📢 Faça a sua cotação agora mesmo!
-      </p>
-    </header>
-
-    <!-- Redes Sociais -->
-    <div class="flex items-center justify-center gap-5 mb-8">
-      <!-- Instagram -->
-      <a href="https://instagram.com/centraldaprotecao" target="_blank" class="text-white hover:text-brand-gold transition-all opacity-90 hover:opacity-100"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg></a>
-      <!-- Facebook -->
-      <a href="https://www.facebook.com/centraldaprotecaosp" target="_blank" class="text-white hover:text-brand-gold transition-all opacity-90 hover:opacity-100"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
-      <!-- TikTok -->
-      <a href="#" target="_blank" class="text-white hover:text-brand-gold transition-all opacity-90 hover:opacity-100"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 15.68a6.34 6.34 0 0 0 6.26 6.32 6.32 6.32 0 0 0 6.22-6.32V10.22a8.31 8.31 0 0 0 4.52 1.33V8.1a4.92 4.92 0 0 1-2.41-.41z"/></svg></a>
-      <!-- YouTube -->
-      <a href="https://www.youtube.com/@centraldaprotecaooficial" target="_blank" class="text-white hover:text-brand-gold transition-all opacity-90 hover:opacity-100"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></a>
-      <!-- WhatsApp -->
-      <a href="https://wa.me/5511967399908" target="_blank" class="text-white hover:text-[#25D366] transition-all opacity-90 hover:opacity-100"><svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.861.174.086.275.073.376-.044.102-.115.434-.506.549-.68.116-.173.232-.144.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.158.572 4.184 1.571 5.932l-1.571 5.736 5.894-1.547c1.7.94 3.655 1.479 5.734 1.479 6.627 0 12-5.373 12-12 0-6.627-5.373-12-12-12z"/></svg></a>
-    </div>
-
-    <!-- Botões (Glassmorphism Minimalista/iOS Style - Sem Piscar) -->
-    <div class="w-full flex flex-col gap-3 mb-8">
-      
-      <!-- Site Oficial -->
-      <a href="https://centraldaprotecao.org.br" target="_blank" class="w-full bg-white/10 border border-white/20 hover:bg-white/20 rounded-[20px] p-3 backdrop-blur-md flex items-center shadow-lg transition-all group">
-        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white group-hover:bg-brand-gold group-hover:text-black transition-colors">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-        </div>
-        <div class="flex-1 ml-4 text-left">
-          <p class="text-[15px] font-semibold text-white">Site Oficial</p>
-        </div>
-        <div class="pr-2 text-white/40 group-hover:text-white transition-colors">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-        </div>
-      </a>
-
-      <!-- Avalie-nos no Google -->
-      <a href="https://maps.app.goo.gl/VJYk8VSh211fsniA7" target="_blank" class="w-full bg-white/10 border border-white/20 hover:bg-white/20 rounded-[20px] p-3 backdrop-blur-md flex items-center shadow-lg transition-all group">
-        <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 text-white group-hover:bg-brand-gold group-hover:text-black transition-colors">
-          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.486 2 2 6.486 2 12s4.486 10 10 10 10-4.486 10-10S17.514 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/><path d="M12 6c-3.309 0-6 2.691-6 6s2.691 6 6 6 6-2.691 6-6-2.691-6-6-6zm0 10c-2.206 0-4-1.794-4-4s1.794-4 4-4 4 1.794 4 4-1.794 4-4 4z"/><path d="M12 9l-1 2.5-2.5 1 2.5 1 1 2.5 1-2.5 2.5-1-2.5-1z"/></svg>
-        </div>
-        <div class="flex-1 ml-4 text-left">
-          <p class="text-[15px] font-semibold text-white">Avalie-nos no Google</p>
-        </div>
-        <div class="pr-2 text-white/40 group-hover:text-white transition-colors">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-        </div>
-      </a>
-      
-    </div>
-
-    <!-- ========================================== -->
-    <!-- CHAT DE INTELIGÊNCIA ARTIFICIAL (Clean) -->
-    <!-- ========================================== -->
-    <div class="w-full bg-white/5 border border-white/10 rounded-[24px] p-4 pb-5 backdrop-blur-xl shadow-2xl flex flex-col relative overflow-hidden">
-      
-      <!-- Detalhe Superior (Estilo Dynamic Island / App) -->
-      <div class="absolute top-0 inset-x-0 flex justify-center">
-        <div class="w-16 h-1 bg-white/20 rounded-b-lg"></div>
-      </div>
-
-      <!-- Chat Header -->
-      <div class="flex items-center gap-3 mb-4 mt-2 pb-3 border-b border-white/10">
-        <!-- Logo Branca no Header do Chat (Sem distorção) -->
-        <div class="w-10 h-10 rounded-full bg-white flex items-center justify-center p-1.5 shadow-md shrink-0">
-          <img src="https://res.cloudinary.com/oactqmgs/image/upload/v1793214951/central_d_aprote%C3%A7%C3%A3o.png" alt="IA" class="w-full h-full object-contain">
-        </div>
-        <div>
-          <h3 class="text-sm font-bold text-white">Central Assistente</h3>
-          <p class="text-[11px] text-green-400 flex items-center gap-1.5 mt-0.5">
-            <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span> Online agora
-          </p>
-        </div>
-      </div>
-
-      <!-- Chat History -->
-      <div id="chatHistorico" class="h-[280px] overflow-y-auto space-y-4 pr-1 custom-scrollbar text-[13px] flex flex-col font-medium">
-        <!-- Messages will be injected here -->
-      </div>
-
-      <!-- Action Area -->
-      <div id="chatAreaAcao" class="mt-2 pt-3 flex flex-col gap-2 min-h-[48px] justify-end">
-        <!-- Inputs and Buttons will be injected here -->
-      </div>
-      
-    </div>
-
-  </main>
-
-  <!-- ========================================== -->
-  <!-- BOTÃO FLUTUANTE WHATSAPP (Com Pulsar Oficial) -->
-  <!-- ========================================== -->
-  <a href="https://wa.me/5511967399908?text=Olá!%20Vim%20pelo%20Link%20na%20Bio%20e%20gostaria%20de%20atendimento." target="_blank" 
-     class="fixed bottom-6 right-6 z-50 w-14 h-14 bg-[#25D366] hover:bg-green-500 rounded-full flex items-center justify-center text-white shadow-2xl whatsapp-pulse transition-transform hover:scale-110 active:scale-95"
-     title="Falar direto no WhatsApp">
-    <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24">
-      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.861.174.086.275.073.376-.044.102-.115.434-.506.549-.68.116-.173.232-.144.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.158.572 4.184 1.571 5.932l-1.571 5.736 5.894-1.547c1.7.94 3.655 1.479 5.734 1.479 6.627 0 12-5.373 12-12 0-6.627-5.373-12-12-12z"/>
-    </svg>
-  </a>
-
-  <!-- ========================================== -->
-  <!-- SCRIPTS DO CHAT IA E WEBHOOK -->
-  <!-- ========================================== -->
-  <script>
-    const WHATSAPP_NUMERO = "5511967399908";
-    const WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby74SNBIq_qY5A5Nauxazi68I2LIBHI-BpgJGM0lCJIISir_8GNqawRBxnDJsmkMrdwOg/exec";
-
-    const botState = {
-      step: 0,
-      data: { nome: '', telefone: '', tipo: 'Carro', modelo: '', uso: 'Particular', cidade: '' }
+    const limpa = (v, max) => {
+      const s = String(v || '').slice(0, max);
+      return /^[=+\-@]/.test(s) ? "'" + s : s;
     };
 
-    function mascaraTelefone(input) {
-      let v = input.value.replace(/\D/g, "");
-      if (v.length > 11) v = v.substring(0, 11);
-      if (v.length > 10) input.value = `(${v.substring(0, 2)}) ${v.substring(2, 7)}-${v.substring(7)}`;
-      else if (v.length > 6) input.value = `(${v.substring(0, 2)}) ${v.substring(2, 6)}-${v.substring(6)}`;
-      else if (v.length > 2) input.value = `(${v.substring(0, 2)}) ${v.substring(2)}`;
-      else input.value = v;
-    }
+    // Monta os detalhes capturando tudo o que vier do site (Nome, Telefone, Veículo, Uso, Região, etc.)
+    const partesDetalhes = [];
+    if (p.nome) partesDetalhes.push('Nome: ' + limpa(p.nome, 80));
+    if (p.telefone) partesDetalhes.push('WhatsApp: ' + limpa(p.telefone, 20));
+    if (p.tipo) partesDetalhes.push('Tipo: ' + limpa(p.tipo, 50));
+    if (p.veiculo) partesDetalhes.push('Veículo: ' + limpa(p.veiculo, 100));
+    if (p.uso) partesDetalhes.push('Uso: ' + limpa(p.uso, 100));
+    if (p.regiao) partesDetalhes.push('Região: ' + limpa(p.regiao, 100));
+    if (p.detalhes || p.mensagem) partesDetalhes.push(limpa(p.detalhes || p.mensagem, 500));
 
-    function addMsgBot(texto) {
-      const hist = document.getElementById('chatHistorico');
-      const div = document.createElement('div');
-      div.className = "flex gap-2 items-end chat-bubble-bot w-full";
-      div.innerHTML = `
-        <div class="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center p-1 shrink-0 mb-1">
-          <img src="https://res.cloudinary.com/oactqmgs/image/upload/v1793214951/central_d_aprote%C3%A7%C3%A3o.png" class="w-full h-full object-contain">
-        </div>
-        <div class="bg-white/10 text-white px-3.5 py-2.5 rounded-2xl rounded-bl-sm leading-relaxed max-w-[85%] backdrop-blur-md border border-white/5 shadow-sm">
-          ${texto}
-        </div>
-      `;
-      hist.appendChild(div);
-      hist.scrollTop = hist.scrollHeight;
-    }
+    const detalhesStr = partesDetalhes.join(' | ');
 
-    function addMsgUser(texto) {
-      const hist = document.getElementById('chatHistorico');
-      const div = document.createElement('div');
-      div.className = "flex justify-end chat-bubble-user w-full mb-1";
-      div.innerHTML = `
-        <div class="bg-brand-gold text-black font-semibold px-4 py-2.5 rounded-2xl rounded-br-sm leading-relaxed max-w-[85%] shadow-md">
-          ${texto}
-        </div>
-      `;
-      hist.appendChild(div);
-      hist.scrollTop = hist.scrollHeight;
-    }
+    sh.appendRow([
+      Utilities.formatDate(new Date(), 'America/Sao_Paulo', 'yyyy-MM-dd HH:mm:ss'),
+      limpa(p.tipoLead || p.tipo || 'Cotação Veicular', 60),
+      limpa(p.canal || p.origem || 'Link na Bio / IA', 60),
+      limpa(p.assunto || 'Nova Cotação', 100),
+      detalhesStr,
+      'Novo',
+      limpa(p.corretor, 60),
+      limpa(p.imovel || p.veiculo, 300),
+      '',
+      ''
+    ]);
 
-    function setAcaoBot(html) {
-      document.getElementById('chatAreaAcao').innerHTML = html;
-    }
+    return resp('sucesso', 'Lead gravado com sucesso!');
+  } catch (error) {
+    return resp('erro', error.toString());
+  } finally {
+    try { lock.releaseLock(); } catch (x) {}
+  }
+}
 
-    function showTypingAndRespond(msg, actionHtml, delay = 400) {
-      setAcaoBot('');
-      const hist = document.getElementById('chatHistorico');
-      const typingId = 'typing-' + Date.now();
-      
-      const div = document.createElement('div');
-      div.id = typingId;
-      div.className = "flex gap-2 items-end chat-bubble-bot w-full";
-      div.innerHTML = `
-        <div class="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center p-1 shrink-0 mb-1">
-          <img src="https://res.cloudinary.com/oactqmgs/image/upload/v1793214951/central_d_aprote%C3%A7%C3%A3o.png" class="w-full h-full object-contain">
-        </div>
-        <div class="bg-white/10 px-3.5 py-3 rounded-2xl rounded-bl-sm flex gap-1.5 items-center backdrop-blur-md border border-white/5">
-          <span class="w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse"></span>
-          <span class="w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse" style="animation-delay: 200ms"></span>
-          <span class="w-1.5 h-1.5 bg-white/70 rounded-full animate-pulse" style="animation-delay: 400ms"></span>
-        </div>
-      `;
-      hist.appendChild(div);
-      hist.scrollTop = hist.scrollHeight;
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({ status: 'ativo', mensagem: 'Webhook funcionando perfeitamente!' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
-      setTimeout(() => {
-        const el = document.getElementById(typingId);
-        if(el) el.remove();
-        addMsgBot(msg);
-        if(actionHtml) setAcaoBot(actionHtml);
-      }, delay);
-    }
-
-    // Inicialização do Chat
-    window.onload = () => {
-      setTimeout(() => {
-        showTypingAndRespond("Olá! Sou a inteligência artificial da <b>Central da Proteção</b>. 🛡️", null, 400);
-        setTimeout(() => {
-          showTypingAndRespond("Para iniciar sua cotação rápida, qual é o seu <b>nome</b>?", `
-            <form onsubmit="botNome(event)" class="flex gap-2 w-full">
-              <input type="text" id="botInputNome" placeholder="Digite seu nome..." required class="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-3 text-[13px] text-white placeholder-white/50 focus:outline-none focus:border-brand-gold backdrop-blur-md shadow-inner">
-              <button type="submit" class="bg-brand-gold text-black font-bold px-5 py-3 rounded-full text-[13px] hover:bg-yellow-400 transition-colors shadow-lg">→</button>
-            </form>
-          `, 800);
-        }, 800);
-      }, 400);
-    };
-
-    function botNome(e) {
-      e.preventDefault();
-      const val = document.getElementById('botInputNome').value.trim();
-      if (!val) return;
-      botState.data.nome = val;
-      const primeiroNome = val.split(' ')[0];
-      addMsgUser(val);
-
-      showTypingAndRespond(`Prazer, <b>${primeiroNome}</b>! Qual o tipo do seu veículo?`, `
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="botTipo('Carro')" class="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] font-semibold text-white transition-colors">🚗 Carro</button>
-          <button onclick="botTipo('Moto')" class="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] font-semibold text-white transition-colors">🏍️ Moto</button>
-          <button onclick="botTipo('Van / Utilitário')" class="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] font-semibold text-white transition-colors">🚐 Utilitário</button>
-          <button onclick="botTipo('Caminhão')" class="py-2.5 px-3 bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] font-semibold text-white transition-colors">🚛 Caminhão</button>
-        </div>
-      `, 600);
-    }
-
-    function botTipo(tipo) {
-      botState.data.tipo = tipo;
-      addMsgUser(tipo);
-
-      showTypingAndRespond("Qual a <b>Marca, Modelo e Ano</b>? (Ex: Onix 1.0 2021)", `
-        <form onsubmit="botModelo(event)" class="flex gap-2 w-full">
-          <input type="text" id="botInputModelo" placeholder="Ex: Gol 1.6 2018" required class="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-3 text-[13px] text-white placeholder-white/50 focus:outline-none focus:border-brand-gold backdrop-blur-md shadow-inner">
-          <button type="submit" class="bg-brand-gold text-black font-bold px-5 py-3 rounded-full text-[13px] hover:bg-yellow-400 transition-colors shadow-lg">→</button>
-        </form>
-      `, 600);
-    }
-
-    function botModelo(e) {
-      e.preventDefault();
-      const val = document.getElementById('botInputModelo').value.trim();
-      if (!val) return;
-      botState.data.modelo = val;
-      addMsgUser(val);
-
-      showTypingAndRespond("Para qual <b>finalidade</b> você usa o veículo?", `
-        <div class="flex flex-col gap-2">
-          <button onclick="botUso('Particular')" class="py-3 px-4 text-left bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] text-white font-medium transition-colors">🏠 Uso Particular / Lazer</button>
-          <button onclick="botUso('Aplicativo (Uber/99)')" class="py-3 px-4 text-left bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] text-white font-medium transition-colors">🚗 Motorista de App (Uber/99)</button>
-          <button onclick="botUso('Trabalho / Comercial')" class="py-3 px-4 text-left bg-white/10 hover:bg-white/20 border border-white/20 rounded-xl text-[13px] text-white font-medium transition-colors">💼 Comercial / Empresa</button>
-        </div>
-      `, 600);
-    }
-
-    function botUso(uso) {
-      botState.data.uso = uso;
-      addMsgUser(uso);
-
-      showTypingAndRespond("Em qual <b>cidade ou região de SP</b> você mora / pernoita?", `
-        <form onsubmit="botCidade(event)" class="flex gap-2 w-full">
-          <input type="text" id="botInputCidade" placeholder="Ex: Zona Leste, Guarulhos..." required class="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-3 text-[13px] text-white placeholder-white/50 focus:outline-none focus:border-brand-gold backdrop-blur-md shadow-inner">
-          <button type="submit" class="bg-brand-gold text-black font-bold px-5 py-3 rounded-full text-[13px] hover:bg-yellow-400 transition-colors shadow-lg">→</button>
-        </form>
-      `, 600);
-    }
-
-    function botCidade(e) {
-      e.preventDefault();
-      const val = document.getElementById('botInputCidade').value.trim();
-      if (!val) return;
-      botState.data.cidade = val;
-      addMsgUser(val);
-
-      showTypingAndRespond("Quase lá! Qual o seu <b>WhatsApp</b> para enviarmos a cotação?", `
-        <form onsubmit="botFinalizar(event)" class="flex gap-2 w-full">
-          <input type="tel" id="botInputTel" placeholder="(11) 99999-9999" maxlength="15" oninput="mascaraTelefone(this)" required class="flex-1 bg-white/10 border border-white/20 rounded-full px-4 py-3 text-[13px] text-white placeholder-white/50 focus:outline-none focus:border-brand-gold backdrop-blur-md shadow-inner">
-          <button type="submit" class="bg-brand-gold text-black font-bold px-5 py-3 rounded-full text-[13px] hover:bg-yellow-400 transition-colors shadow-lg">→</button>
-        </form>
-      `, 600);
-    }
-
-    function botFinalizar(e) {
-      e.preventDefault();
-      const val = document.getElementById('botInputTel').value.trim();
-      if (!val) return;
-      botState.data.telefone = val;
-      addMsgUser(val);
-
-      showTypingAndRespond("Tudo pronto! ✅ Toque abaixo para abrir o WhatsApp oficial e receber os valores.", `
-        <button id="btnFinalizarRobo" onclick="acionarZapBot(this)" class="w-full bg-[#25D366] hover:bg-green-500 text-white font-bold py-3.5 px-4 rounded-[16px] flex items-center justify-center gap-2 text-[14px] shadow-xl shadow-green-500/20 transition-all active:scale-95">
-          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.77-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.861.174.086.275.073.376-.044.102-.115.434-.506.549-.68.116-.173.232-.144.39-.086s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824zm-3.423-14.416c-6.627 0-12 5.373-12 12 0 2.158.572 4.184 1.571 5.932l-1.571 5.736 5.894-1.547c1.7.94 3.655 1.479 5.734 1.479 6.627 0 12-5.373 12-12 0-6.627-5.373-12-12-12z"/></svg>
-          <span>Abrir WhatsApp e Finalizar</span>
-        </button>
-      `, 600);
-    }
-
-    function acionarZapBot(btn) {
-      btn.disabled = true;
-      btn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Encaminhando...`;
-      
-      const dados = botState.data;
-      const texto = 
-        `Olá, equipe da *Central da Proteção Regional SP*! 👋\n\n` +
-        `Recebemos um novo lead pelo *App Bio (IA)*.\n\n` +
-        `👤 *NOME:* ${dados.nome}\n` +
-        `📱 *WHATSAPP:* ${dados.telefone}\n` +
-        `🚗 *CATEGORIA:* ${dados.tipo}\n` +
-        `🚘 *VEÍCULO (Ano/Mod):* ${dados.modelo}\n` +
-        `💼 *USO:* ${dados.uso}\n` +
-        `📍 *REGIÃO:* ${dados.cidade}\n\n` +
-        `Aguardo o retorno do consultor com os valores disponíveis!`;
-
-      const link = `https://wa.me/${WHATSAPP_NUMERO}?text=${encodeURIComponent(texto)}`;
-
-      let redirecionado = false;
-      const irParaWhatsApp = () => {
-        if (!redirecionado) {
-          redirecionado = true;
-          window.location.href = link;
-        }
-      };
-
-      setTimeout(irParaWhatsApp, 1500);
-
-      fetch(WEBHOOK_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origem: 'App Bio (IA)',
-          nome: dados.nome,
-          telefone: dados.telefone,
-          tipo: dados.tipo,
-          veiculo: dados.modelo,
-          uso: dados.uso,
-          regiao: dados.cidade,
-          data: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
-        })
-      }).finally(() => {
-        irParaWhatsApp();
-      });
-    }
-  </script>
-</body>
-</html>
+function resp(status, mensagem, data) {
+  const corpo = { status: status, mensagem: mensagem || '' };
+  if (data) corpo.data = data;
+  return ContentService.createTextOutput(JSON.stringify(corpo))
+    .setMimeType(ContentService.MimeType.JSON);
+}
